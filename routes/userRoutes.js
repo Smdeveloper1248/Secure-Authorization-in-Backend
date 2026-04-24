@@ -1,21 +1,20 @@
 // routes/userRoutes.js
 
 import express from 'express';
-import { getAllUsers, updateProfile,getProfile } from '../controllers/userController.js';
+import { getAllUsers, updateProfile,getProfile,deleteUserById } from '../controllers/userController.js';
 import { verifyToken, isAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// READ ALL USERS: Admin Only (Vertical Privilege Escalation Target)
-router.get('/', verifyToken, isAdmin, getAllUsers); 
-
+// Profile management (Current User)
 router.get('/me', verifyToken, getProfile);
 
-// UPDATE PROFILE: Mass Assignment Target!
-router.put('/me', verifyToken, updateProfile);
-// ⭐ NEW ROUTE: GET /api/users/me (Read own profile)
+// Vertical access control Vulnerability here
+router.put('/me', verifyToken, updateProfile);  // Mass Assignment Target
 
-
+// Admin management (All Users)
+router.get('/', verifyToken, isAdmin, getAllUsers);
+router.delete('/:id', verifyToken, isAdmin, deleteUserById);
 
 
 export default router;

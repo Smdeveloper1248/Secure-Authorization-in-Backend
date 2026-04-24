@@ -29,6 +29,11 @@ export const getAllEnrollments = async (req, res) => {
 export const getEnrollmentById = async (req, res) => {
     const id = parseInt(req.params.id);
     
+    // Check for NaN or invalid ID early
+    if (isNaN(id) || id < 1) {
+        return res.status(400).json({ message: "Invalid enrollment ID." });
+    }
+
     try {
         // 1. Fetch the enrollment record
         const enrollment = await database.get(`
@@ -48,24 +53,26 @@ export const getEnrollmentById = async (req, res) => {
         }
 
         // -----------------------------------------------------
-        // 🐞 IDOR VULNERABILITY (INTENTIONAL FLAW) 🐞
-        // We only check if the user is a student, but we DO NOT check 
-        // if the student_id on the record matches the logged-in user's ID (req.user.id).
-        // If the user is an admin, they are allowed.
-        if (req.user.role === 'student' && enrollment.student_id !== req.user.id) {
-            // This is the CRITICAL missing check!
-            // We should put the check here, but we will omit it for the bug!
-            // CORRECT CHECK WOULD BE: if (req.user.role === 'student' && enrollment.student_id !== req.user.id) { return res.status(403) }
-            // For now, we will leave the door open for a student to check ANY enrollment ID.
-        }
+        // ✅ IDOR FIX: Horizontal Access Control Check
+        // If the user is a student AND the record does NOT belong to them, deny access.
+        
+        // Check 1: Is the user a student?
+        // if (req.user.role === 'student') {
+        //     // Check 2: Does the record owner ID match the logged-in user ID?
+        //     if (enrollment.student_id !== req.user.id) {
+        //         console.log(`❌ IDOR Attempt Blocked: User ${req.user.id} tried to access record ${id} belonging to user ${enrollment.student_id}`);
+        //         return res.status(403).json({ message: "Forbidden. You can only view your own enrollment records." });
+        //     }
+        // }
+        // Admins pass this check, as their role is not 'student'.
         // -----------------------------------------------------
 
         res.json(enrollment);
     } catch (error) {
+        console.error('Error retrieving enrollment:', error);
         res.status(500).json({ message: "Failed to retrieve enrollment record." });
     }
 };
-
 // ADMIN: Update a grade (example of a high-privilege action)
 export const updateGrade = async (req, res) => {
     const id = parseInt(req.params.id);
@@ -159,3 +166,73 @@ export const enrollStudent = async (req, res) => {
         res.status(500).json({ message: "Failed to process enrollment." });
     }
 };
+
+// ADMIN: Delete a specific enrollment record
+export const deleteEnrollment = async (req, res) => {
+    const { id } = req.params; // Expects /enrollment/:id
+
+    try {
+        // We use database.run for DELETE statements
+        const result = await database.run(
+            `DELETE FROM enrollments WHERE id = ?`,
+            [id]
+        );
+
+        // Check if any row was actually affected
+        if (result.changes === 0) {
+            return res.status(404).json({ 
+                message: "Enrollment record not found or already deleted." 
+            });
+        }
+
+        // Return success if the row was removed
+        res.json({ 
+            message: "Enrollment deleted successfully.", 
+            deletedId: id 
+        });
+
+    } catch (error) {
+        console.error("Delete Error:", error);
+        res.status(500).json({ 
+            message: "An error occurred while trying to delete the enrollment." 
+        });
+    }
+};
+
+/*
+
+Secure Query Version IDOR fix
+
+export const getEnrollmentById = async (req, res) => {
+
+    // enrollement id 
+    const id = parseInt(req.params.id);
+    
+    try{
+        // We pass both the record ID AND the logged-in user's data to the query
+        const enrollment = await database.get(`
+            SELECT 
+                e.*, 
+                u.name AS student_name,
+                c.code AS course_code,
+                c.name AS course_name
+            FROM enrollments e
+            JOIN users u ON e.student_id = u.id
+            JOIN courses c ON e.course_id = c.id
+            WHERE e.id = ? 
+              AND (e.student_id = ? OR ? = 'admin')
+        `, [id, req.user.id, req.user.role]);
+
+        // If the record doesn't exist OR the user doesn't own it, 
+        // enrollment will be undefined.
+        if (!enrollment) {
+            return res.status(404).json({ message: "Enrollment record not found." });
+        }
+        res.json(enrollment);
+
+    } catch (error) {
+        res.status(500).json({ message: "Failed to retrieve enrollment record." });
+    }
+};
+
+*/

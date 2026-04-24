@@ -1,7 +1,7 @@
 // routes/enrollmentRoutes.js
 
 import express from 'express';
-import { getAllEnrollments,getMyEnrollments, getEnrollmentById, updateGrade,enrollStudent} from '../controllers/enrollmentController.js';
+import { getAllEnrollments,getMyEnrollments, getEnrollmentById, updateGrade,enrollStudent,deleteEnrollment} from '../controllers/enrollmentController.js';
 import { verifyToken, isAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -20,7 +20,8 @@ router.get('/me', verifyToken, getMyEnrollments); // ⭐
 // UPDATE GRADE (Admin Only)
 router.route('/:id')
     .get(verifyToken, getEnrollmentById) // 🐞 IDOR FLAW: Missing horizontal check in controller
-    .put(verifyToken, isAdmin, updateGrade);
+    .put(verifyToken, isAdmin, updateGrade)
+    .delete(verifyToken,isAdmin,deleteEnrollment);
 
 export default router;
 

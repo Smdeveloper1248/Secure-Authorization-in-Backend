@@ -1,6 +1,7 @@
 // controllers/userController.js
 
 import { db as database } from '../db.js';
+// import { updateProfileDTO } from '../dto/user.dto.js';
 
 // ADMIN: Get list of all users
 export const getAllUsers = async (req, res) => {
@@ -14,41 +15,44 @@ export const getAllUsers = async (req, res) => {
 };
 
 
-// STUDENT/ADMIN: Update own profile (Mass Assignment Target!)
+// STUDENT/ADMIN: Update own profile (Highly Vulnerable Version)
 export const updateProfile = async (req, res) => {
-    // The ID of the user to update is taken from the authenticated token
-    const userId = req.user.id; 
-    
-    // The data sent by the client
-    const { name, email, role } = req.body; 
+    const userId = req.user.id;
 
-    if (!name && !email) {
-        return res.status(400).json({ message: "Provide name or email to update." });
+    // Mass Assignment Fix, Preventing Vertical Access Control
+
+    // const updates = updateProfileDTO(req.body);
+
+    const updates = req.body;
+
+    if (Object.keys(updates).length === 0) {
+        return res.status(400).json({ message: "No data provided to update." });
     }
-    
+
     try {
-        // -----------------------------------------------------
-        // 🐞 MASS ASSIGNMENT VULNERABILITY (INTENTIONAL FLAW) 🐞
-        // We are constructing the SQL query using ALL incoming fields, including 'role'.
-        // This allows a Student to send a body like { "role": "admin" } and elevate privileges.
-        let query = 'UPDATE users SET name = COALESCE(?, name), email = COALESCE(?, email), role = COALESCE(?, role) WHERE id = ?';
-        
-        const result = await database.run(
-            query, 
-            [name, email, role, userId] // The incoming 'role' from req.body is used here!
-        );
+       
+        const fields = Object.keys(updates)
+            .map(field => `${field} = ?`)
+            .join(', ');
+
+        const values = Object.values(updates);
+
+        const query = `UPDATE users SET ${fields} WHERE id = ?`;
+
+        const result = await database.run(query, [...values, userId]);
         // -----------------------------------------------------
 
         if (result.changes === 0) {
             return res.status(404).json({ message: "User not found or no changes made." });
         }
-        
-        const updatedUser = await database.get('SELECT id, name, email, role FROM users WHERE id = ?', [userId]);
+
+        const updatedUser = await database.get(
+            'SELECT id, name, email, role FROM users WHERE id = ?', 
+            [userId]
+        );
+
         res.json(updatedUser);
     } catch (error) {
-        if (error.code === 'SQLITE_CONSTRAINT') {
-             return res.status(409).json({ message: "New email already in use." });
-        }
         res.status(500).json({ message: "Failed to update profile." });
     }
 };
@@ -75,5 +79,25 @@ export const getProfile = async (req, res) => {
     } catch (error) {
         console.error('Error fetching user profile:', error);
         res.status(500).json({ message: "Failed to retrieve profile data." });
+    }
+};
+
+export const deleteUserById = async (req, res) => {
+    // Extract id from the URL parameters (e.g., /users/:id)
+    const { id } = req.params;
+
+    try {
+        // Execute the delete query
+        const result = await database.run('DELETE FROM users WHERE id = ?', [id]);
+
+        // check if any row was actually deleted
+        if (result.changes === 0) {
+            return res.status(404).json({ message: "User not found." });
+        }
+
+        res.json({ message: "User deleted successfully." });
+    } catch (error) {
+        console.error("Delete Error:", error);
+        res.status(500).json({ message: "Failed to delete user." });
     }
 };
