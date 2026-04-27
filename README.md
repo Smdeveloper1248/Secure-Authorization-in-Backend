@@ -2,7 +2,7 @@
 
 This repository contains a **step-by-step Express.js backend server** demonstrating secure authorization concepts, including JWT authentication, role-based access control (RBAC), horizontal vs vertical access control, and other secure authorization practices for developers.
 
-Each feature is developed in a **separate branch** for tutorial purposes.
+Each feature is developed in a **separate branch** for tutorial purposes
 
 ---
 
